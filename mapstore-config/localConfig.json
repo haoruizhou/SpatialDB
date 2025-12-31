@@ -1,0 +1,16 @@
+{
+  "default_services": {
+    "My Default GeoServer": {
+      "url": "http://geoserver:8080/geoserver/wfs",
+      "type": "wfs",
+      "title": "Project DB"
+    }
+  },
+  "initialState": {
+    "defaultState": {
+      "catalog": {
+        "selectedService": "Project DB"
+      }
+    }
+  }
+}

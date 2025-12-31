@@ -1,0 +1,182 @@
+services:
+  postgres:
+    image: postgis/postgis:15-3.3
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: spatialdb
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  pgadmin:
+    build: ./pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@company.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "0.0.0.0:5050:80"
+    restart: unless-stopped
+
+  # this is the backend of Tianditu-frontend, but is not used
+#  flask:
+#    build: ./flask-app
+#    environment:
+#      FLASK_ENV: production
+#      DATABASE_URL: "postgresql://admin:admin@postgres:5432/spatialdb"
+#      SECRET_KEY: yourRandomSecretHere
+#      AMAP_KEY: your_amap_key_here
+#    depends_on:
+#      - postgres
+#    volumes:
+#      - ./flask-app:/app
+#    ports:
+#      - "5001:5000"
+#    restart: unless-stopped
+
+  geocoder_worker:
+    build: ./flask-app
+    command: ["python", "geocode_worker.py"]
+    environment:
+      DATABASE_URL: "postgresql://admin:admin@postgres:5432/spatialdb"
+      AMAP_KEY: your_amap_key_here
+    depends_on:
+      - postgres
+    links:
+      - postgres
+    restart: unless-stopped
+    volumes:
+      - ./flask-app:/app
+
+  # tianditu front end is not used, use MapStore instead for plotting
+#  frontend:
+#    build: ./tianditu-frontend
+#    environment:
+#      API_URL: http://flask:5000
+#      TIANDITU_KEY: your_tianditu_key_here
+#    depends_on:
+#      - flask
+#    volumes:
+#      - ./tianditu-frontend:/usr/src/app
+#    ports:
+#      - "3000:3000"
+#    restart: unless-stopped
+
+
+#  umap:
+#      image: umap/umap:3.0.6
+#      environment:
+#        PUBLIC_URL: "http://localhost:8023/"
+#        # Use the new database and user for uMap
+#        DATABASE_URL: "postgis://umap:umap_password@postgres:5432/umap_db"
+#        SECRET_KEY: "yourSuperSecretDjangoKeyHere"
+#      depends_on:
+#        - postgres
+#      ports:
+#        - "8023:8000"
+#      restart: unless-stopped
+#      volumes:
+#        - umap_data:/data
+
+  # ── GeoServer (WMS / WFS) ─────────────────────────────────────────────────────
+  geoserver:
+    image: kartoza/geoserver:2.27.1
+    environment:
+      GWC_DISKQUOTA_STORE: "file"
+      GEOSERVER_ADMIN_USER: admin
+      GEOSERVER_ADMIN_PASSWORD: admin
+    # depends_on:
+      # postgres:
+        # condition: service_healthy
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8080/geoserver/web || exit 1" ]
+      interval: 15s
+      retries: 5
+
+  geoserver_setup:
+    image: alpine/curl:latest
+    depends_on:
+      geoserver:
+        condition: service_healthy # Waits for GeoServer to be healthy
+    volumes:
+      - ./geoserver-setup:/setup
+    command: sh /setup/configure-geoserver.sh
+    restart: on-failure # If it fails, try again a few times
+
+
+  mapstore:
+    image: geosolutionsit/mapstore2:latest          # ✔ runs MapStore 2
+    environment:                                   # YAML block (not a list)
+      # ↙ internal container-to-container endpoint
+      MAPSTORE_GEOSERVER_URL: "http://geoserver:8080/geoserver/"
+      # ↙ endpoint exposed to the browser for the print plugin
+      MAPSTORE_PRINT_URL:   "http://geoserver:8080/geoserver/pdf"
+      # ↙ alias=URL  (equals sign--not colon)  for JS URL-rewriting
+      MAPSTORE_GEOSERVER_OVERRIDES: "geoserver=http://geoserver:8080/geoserver/"
+      # Optional—supply GeoServer admin creds if you need secured layers
+      MAPSTORE_GEOSERVER_USER: admin
+      MAPSTORE_GEOSERVER_PASSWORD: geoserver
+    #volumes:
+      # Hot-swap a tweaked localConfig.json while you iterate
+      #- ./mapstore-config/localConfig.json:/usr/local/tomcat/webapps/mapstore/localConfig.json
+    depends_on:
+      - geoserver
+    ports:
+      - "3050:8080"     # host-port 3050 → container 8080
+    restart: unless-stopped
+
+#  geocache_flush:
+#    image: curlimages/curl:latest
+#    depends_on:
+#      - geoserver
+#    # one long shell-command; wrap it in sh -c so the
+#    # spaces and quotes are preserved
+#    command: >
+#      sh -c 'while sleep 30; do
+#               curl -u admin:admin -XPOST \
+#                    "http://geoserver:8080/geoserver/gwc/rest/seed/shanghai_properties:dynamic_projects_view.xml" \
+#                    -H "Content-Type: text/xml" \
+#                    -d "<seedRequest>
+#                          <name>shanghai_properties:dynamic_projects_view</name>
+#                          <truncateCache>true</truncateCache>
+#                        </seedRequest>";
+#             done'
+#    restart: unless-stopped
+
+
+  geoserver_auto_publish:
+    image: alpine:3.20           # tiny base image
+    depends_on:
+      - geoserver
+      - postgres
+    environment:
+      # ── credentials ─────────────────────────────
+      PGHOST:     postgres
+      PGUSER:     admin
+      PGPASSWORD: admin
+      PGDATABASE: spatialdb
+
+      GEOSERVER_URL:  http://geoserver:8080/geoserver
+      GEOSERVER_USER: admin
+      GEOSERVER_PASS: admin
+
+      WORKSPACE:  shanghai_properties
+      DATASTORE:  cdh_mezz_postgis
+    volumes:
+      - ./auto-publish:/scripts           # put the script below here
+    command: /scripts/auto-publish.sh
+    restart: unless-stopped
+volumes:
+  pg_data:
+  pgadmin_data:
+  # umap_data:
