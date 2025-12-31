@@ -125,6 +125,13 @@ Once the services are running, access them via your browser:
 
 *   **Travel Time**: Extend `geocoder_worker` to calculate walking/biking time to the nearest station using the Amap API.
 
+## Technical Highlights & Compliance
+
+This project demonstrates rigorous handling of complex geospatial data standards:
+
+*   **Dual Coordinate System Support**: The system automatically manages both global **WGS-84** (EPSG:4326) and the national standard **GCJ-02** (EPSG:4490) coordinate systems.
+*   **Automated Transformation**: The geocoding worker integrates a robust conversion algorithm to transform Amap API results (GCJ-02) into WGS-84 for global analysis compatibility while preserving the original national standard coordinates for local compliance and accuracy.
+
 ## License
 
 This project is licensed under the GNU Affero General Public License v3.0 (AGPLv3). See the `LICENSE` file for details.
@@ -257,6 +264,20 @@ This project is licensed under the GNU Affero General Public License v3.0 (AGPLv
 *   **坪效分析**：创建图表分析距离与坪效（sqm efficiency）的相关性。
 
 *   **出行时间计算**：扩展 `geocoder_worker`，利用高德 API 计算步行或骑行到最近地铁站的时间。
+
+
+
+## 技术亮点与合规性 (Technical Highlights)
+
+
+
+本项目展示了对复杂地理空间数据标准的严谨处理能力：
+
+
+
+*   **双坐标系支持**：系统自动管理全球通用的 **WGS-84** (EPSG:4326) 和国家标准 **GCJ-02** (EPSG:4490) 两种坐标系。
+
+*   **自动转换与合规**：地理编码服务集成了转换算法，将高德地图 API 返回的火星坐标 (GCJ-02) 转换为 WGS-84 以进行通用空间分析，同时保留原始国家标准坐标，确保数据在本地应用中的精确性与合规性。
 
 
 
